@@ -18,10 +18,10 @@ const Spinner = () => (
 const App = () => {
   const [topic, setTopic] = useState('');
   const [step, setStep] = useState(1);
-  const [proficiency, setProficiency] = useState('');
-  const [source, setSource] = useState('');
-  const [textLength, setTextLength] = useState('');
-  const [scrollDirection, setScrollDirection] = useState('');
+  const [proficiency, setProficiency] = useState('Beginner');
+  const [source, setSource] = useState('Academic Papers');
+  const [textLength, setTextLength] = useState('Short (5 Pages with Quick Sentences)');
+  const [scrollDirection, setScrollDirection] = useState('sidescroll');
   const [summary, setSummary] = useState('');
   const [storybook, setStorybook] = useState<StoryPage[]>([]);
   const [loading, setLoading] = useState(false);
