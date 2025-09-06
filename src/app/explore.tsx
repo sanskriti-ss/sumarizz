@@ -29,6 +29,20 @@ const App = () => {
   const [bookshelf, setBookshelf] = useState<{ id: number; topic: string; summary: string; storybook: StoryPage[] }[]>([]);
   const [viewingBookId, setViewingBookId] = useState<number | null>(null);
 
+  // Color palette for bookshelf
+  const bookshelfColors = [
+    '#0a174e', // dark blue
+    '#1a237e', // indigo
+    '#311b92', // deep purple
+    '#283593', // blue
+    '#512da8', // purple
+    '#2c2c54', // dark indigo
+    '#3f51b5', // blue
+    '#4a148c', // purple
+    '#120136', // very dark blue
+    '#2d0b4a', // very dark purple
+  ];
+
   // Reset error message whenever the step changes
   useEffect(() => {
     setErrorMessage('');
@@ -266,13 +280,13 @@ const App = () => {
       <div className="relative w-full h-64 flex-1 flex flex-col justify-center">
         {bookshelf.length > 0 ? (
           <div className="flex flex-wrap justify-center gap-4 relative z-10 items-center h-full">
-            {bookshelf.map(book => (
+            {bookshelf.map((book, idx) => (
               <div
                 key={book.id}
                 className="w-6 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer overflow-hidden group flex items-center justify-center"
                 onClick={() => openBook(book.id)}
                 title={book.topic}
-                style={{ backgroundColor: '#0a174e' }} // dark blue
+                style={{ backgroundColor: bookshelfColors[idx % bookshelfColors.length] }}
               >
                 <div className="flex items-center justify-center h-full w-full">
                   <span className="text-white text-xs font-semibold" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.05em' }}>
