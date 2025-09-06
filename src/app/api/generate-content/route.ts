@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 // Rate limit configuration
-const RATE_LIMIT_MAX = 10; // requests per window
+const RATE_LIMIT_MAX = 100; // requests per window
 const RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
 
 function getRateLimitStatus(identifier: string) {
