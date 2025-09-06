@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const imageRateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 // Rate limit configuration for images (more restrictive due to cost)
-const IMAGE_RATE_LIMIT_MAX = 100; // requests per window
+const IMAGE_RATE_LIMIT_MAX = 35; // requests per window
 const IMAGE_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
 
 function getImageRateLimitStatus(identifier: string) {
