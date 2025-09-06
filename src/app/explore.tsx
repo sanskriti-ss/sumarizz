@@ -31,33 +31,6 @@ const App = () => {
   useEffect(() => {
     setErrorMessage('');
   }, [step]);
-  
-  // --- API Call Logic ---
-
-  // A utility function for API calls with exponential backoff
-  const fetchWithBackoff = async (url: string, payload: any, retries = 3, delay = 1000): Promise<any> => {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      if (retries > 0) {
-        await new Promise(res => setTimeout(res, delay));
-        return fetchWithBackoff(url, payload, retries - 1, delay * 2);
-      } else {
-        console.error("API call failed after multiple retries:", error);
-        setErrorMessage("Sorry, something went wrong while contacting the AI. Please try again.");
-        setLoading(false);
-        throw error;
-    }
-  }
-  };
 
   const generateSummary = async () => {
     if (!proficiency || !source || !textLength || !scrollDirection) {
@@ -68,56 +41,44 @@ const App = () => {
     setErrorMessage('');
     setStep(3); // Move to loading step
 
-    const apiKey = process.env.GOOGLE_API_KEY; // API key for Next.js public environment variable
-    if (!apiKey) {
-        setErrorMessage("API key is not configured. Please set it in the environment variables.");
-        setLoading(false);
-        setStep(2); // Go back to the form
-        return;
-    }
-
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-    
-    const systemPrompt = `You are an expert researcher. Your task is to provide a concise, single-paragraph summary of a topic based on a specified source and for a specific audience.`;
-    const userQuery = `Identify the core concepts about "${topic}". Generate a text summary explaining these concepts and theories for a ${proficiency} level audience, assuming the information comes from a ${source}.`;
-
-    const payload = {
-      contents: [{ parts: [{ text: userQuery }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-    };
-
     try {
-      const result = await fetchWithBackoff(apiUrl, payload);
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        setSummary(text);
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic,
+          proficiency,
+          source,
+          type: 'summary'
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          setErrorMessage(`Rate limit exceeded. ${data.message}`);
+        } else {
+          setErrorMessage(data.error || 'Failed to generate summary');
+        }
+        setStep(2);
+        return;
+      }
+
+      if (data.success && data.content) {
+        setSummary(data.content);
         setStep(4);
       } else {
-        throw new Error("Invalid response structure from summary API.");
+        throw new Error("Invalid response from API");
       }
     } catch (error) {
-      setStep(2); // Go back to the form if it fails
+      console.error("Summary generation failed:", error);
+      setErrorMessage("Failed to generate summary. Please try again.");
+      setStep(2);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const generateSpecificImagePrompt = async (storyContent: string) => {
-    const textApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY; // API key for Next.js public environment variable
-    const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${textApiKey}`;
-
-    const prompt = `Given the following storybook page description: "${storyContent}", create a single, detailed visual description for a comic book panel illustration. Break down the scene into 1-3 distinct panels, focusing on the visual elements and actions. The output should be a single string combining these descriptions, e.g., "Panel 1: [description]. Panel 2: [description]..."`;
-
-    const payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-    };
-
-    try {
-      const result = await fetchWithBackoff(textApiUrl, payload);
-      return result.candidates?.[0]?.content?.parts?.[0]?.text || storyContent;
-    } catch (error) {
-      console.error("Failed to generate specific image prompt:", error);
-      return storyContent; // Fallback to original content
     }
   };
 
@@ -125,99 +86,123 @@ const App = () => {
     setLoading(true);
     setErrorMessage('');
     setStep(5); // Go directly to the storybook view
-  
-    const textApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY; // API key for Next.js public environment variable
-    const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${textApiKey}`;
-    
-    const numPages = textLength === 'Full Chapter' ? 30 : 5;
-    let pageContentPrompt;
-    if (proficiency === 'Expert') {
-      pageContentPrompt = textLength === 'Short (5 Pages with Quick Sentences)'
-        ? "a concise, two-sentence explanation."
-        : "a detailed, complex paragraph focusing on a specific sub-topic.";
-    } else {
-      pageContentPrompt = textLength === 'Short (5 Pages with Quick Sentences)'
-        ? "exactly two sentences."
-        : "a short paragraph.";
-    }
 
-    const storyPrompt = proficiency === 'Expert'
-      ? `Based on the following summary: "${summary}", provide a ${numPages}-part analytical breakdown of "${topic}". Each part should be an object with a unique "id", a "title", and ${pageContentPrompt} The content should be written in a formal, academic tone, suitable for a technical paper.`
-      : `Based on the following summary: "${summary}", create a ${numPages}-page storybook about "${topic}". Each page should be an object with a unique "id", a "title", and ${pageContentPrompt} The content should describe a visual scene.`;
-
-    
-    const textPayload = {
-        contents: [{ parts: [{ text: storyPrompt }] }],
-        generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: "ARRAY",
-                items: {
-                    type: "OBJECT",
-                    properties: {
-                        "id": { "type": "NUMBER" },
-                        "title": { "type": "STRING" },
-                        "content": { "type": "STRING" }
-                    },
-                    required: ["id", "title", "content"]
-                }
-            }
-        }
-    };
+    // Determine number of pages based on text length selection
+    const pageCount = textLength === 'Full Chapter' ? 30 : 5;
 
     try {
-        const result = await fetchWithBackoff(textApiUrl, textPayload);
-        const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!jsonText) throw new Error("Failed to generate story content.");
-        
-        // The LLM returns a JSON string, so we must parse it.
-        const storyPages = JSON.parse(jsonText);
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic,
+          proficiency,
+          source,
+          type: 'storybook',
+          pageCount
+        }),
+      });
 
-        const initialStorybookState = storyPages.map((page: any) => ({
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          setErrorMessage(`Rate limit exceeded. ${data.message}`);
+        } else {
+          setErrorMessage(data.error || 'Failed to generate storybook');
+        }
+        setStep(4);
+        return;
+      }
+
+      if (data.success && data.content) {
+        try {
+          // Clean the JSON response - remove any markdown formatting or extra text
+          let cleanedContent = data.content;
+          
+          // If the content is wrapped in markdown code blocks, extract the JSON
+          const jsonMatch = cleanedContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+          if (jsonMatch) {
+            cleanedContent = jsonMatch[1];
+          }
+          
+          // Parse the JSON response
+          const storyPages = JSON.parse(cleanedContent);
+          
+          // Handle both direct array format and object with pages property
+          const pagesArray = Array.isArray(storyPages) ? storyPages : storyPages.pages;
+          
+          if (!pagesArray || !Array.isArray(pagesArray)) {
+            throw new Error("Invalid storybook format - expected array of pages");
+          }
+          
+          const initialStorybookState = pagesArray.map((page: any) => ({
             ...page,
             imageUrl: null,
             imageLoading: true
-        }));
-        setStorybook(initialStorybookState);
-        setLoading(false); // Main loading is done, now load images individually
+          }));
+          
+          setStorybook(initialStorybookState);
+          setLoading(false); // Main loading is done, now load images individually
 
-        // Fetch images for each page
-        storyPages.forEach(async (page: any) => {
-          const specificPrompt = await generateSpecificImagePrompt(page.content);
-          generateImageForPage(page.id, specificPrompt);
-        });
-
+          // Fetch images for each page
+          pagesArray.forEach(async (page: any) => {
+            generateImageForPage(page.id, page.imageDescription || page.content);
+          });
+        } catch (parseError) {
+          console.error("JSON parsing error:", parseError);
+          console.log("Raw content:", data.content);
+          setErrorMessage("Failed to parse the generated story. The AI returned invalid data.");
+          setStep(4);
+        }
+      } else {
+        throw new Error("Invalid response from API");
+      }
     } catch (error) {
-        setErrorMessage("Failed to generate the story's text. Please try again.");
-        setStep(4); // Go back
+      console.error("Storybook generation failed:", error);
+      setErrorMessage("Failed to generate the story. Please try again.");
+      setStep(4);
     }
   };
 
   const generateImageForPage = async (pageId: number, imagePrompt: string) => {
-    const imageApiKey = process.env.GOOGLE_API_KEY; // API key for Next.js public environment variable
-    const imageApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${imageApiKey}`;
-    
-    const finalPrompt = `A high-quality, visually stunning comic book panel illustration for a storybook. ${imagePrompt}. Focus on vibrant, digital art with clear outlines and a dynamic composition.`;
-    
-    const imagePayload = { 
-        instances: [{ prompt: finalPrompt }],
-        parameters: { "sampleCount": 1 }
-    };
-
     try {
-        const result = await fetchWithBackoff(imageApiUrl, imagePayload);
-        const base64Data = result.predictions?.[0]?.bytesBase64Encoded;
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          pageId: pageId
+        }),
+      });
 
-        if (base64Data) {
-            const imageUrl = `data:image/png;base64,${base64Data}`;
-            setStorybook(prev => prev.map(p => p.id === pageId ? { ...p, imageUrl, imageLoading: false } : p));
-        } else {
-            throw new Error("Invalid image data structure.");
-        }
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate image');
+      }
+
+      if (data.success && data.imageUrl) {
+        setStorybook(prev => prev.map(p => 
+          p.id === pageId ? { ...p, imageUrl: data.imageUrl, imageLoading: false } : p
+        ));
+      } else {
+        throw new Error("Invalid response from image API");
+      }
     } catch (error) {
-        console.error(`Failed to generate image for page ${pageId}:`, error);
-        // Set a placeholder on failure
-        setStorybook(prev => prev.map(p => p.id === pageId ? { ...p, imageUrl: `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`, imageLoading: false } : p));
+      console.error(`Failed to generate image for page ${pageId}:`, error);
+      // Set a placeholder on failure
+      setStorybook(prev => prev.map(p => 
+        p.id === pageId ? { 
+          ...p, 
+          imageUrl: `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`, 
+          imageLoading: false 
+        } : p
+      ));
     }
   };
 
