@@ -94,6 +94,10 @@ const App = () => {
     setErrorMessage('');
     setStep(3); // Move to loading step
 
+    // Add a timeout for the fetch request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds
+
     try {
       const response = await fetch('/api/generate-content', {
         method: 'POST',
@@ -106,7 +110,9 @@ const App = () => {
           source,
           type: 'summary'
         }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -121,14 +127,25 @@ const App = () => {
       }
 
       if (data.success && data.content) {
-        setSummary(data.content);
+        // Clean summary of unwanted instructional/meta text
+        let cleanedSummary = data.content;
+        cleanedSummary = cleanedSummary.replace(/Generated Text Summary.*\n?/i, '');
+        cleanedSummary = cleanedSummary.replace(/Okay, I\'m ready\..*\n?/i, '');
+        cleanedSummary = cleanedSummary.replace(/\d+\. \*\*.*\*\*.*\n?/g, '');
+        cleanedSummary = cleanedSummary.replace(/Once you provide this, I will deliver.*\n?/i, '');
+        cleanedSummary = cleanedSummary.trim();
+        setSummary(cleanedSummary);
         setStep(4);
       } else {
         throw new Error("Invalid response from API");
       }
     } catch (error) {
-      console.error("Summary generation failed:", error);
-      setErrorMessage("Failed to generate summary. Please try again.");
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setErrorMessage('Request timed out. Please try again.');
+      } else {
+        console.error("Summary generation failed:", error);
+        setErrorMessage("Failed to generate summary. Please try again.");
+      }
       setStep(2);
     } finally {
       setLoading(false);
@@ -544,7 +561,7 @@ const App = () => {
         const scrollClasses = scrollDirection === 'sidescroll' 
           ? 'flex overflow-x-auto space-x-6 p-4 rounded-xl' 
           : 'flex flex-col space-y-6 p-4 rounded-xl';
-        
+        const imageHeight = scrollDirection === 'sidescroll' ? 'h-64' : 'h-[32rem]'; // double height for vertical scroll
         return (
           <div className="w-full">
             <h2 className="text-3xl font-bold mb-2 text-center text-white">Your Story: {topic}</h2>
@@ -557,7 +574,7 @@ const App = () => {
                   key={page.id || index} 
                   className={`bg-white rounded-lg shadow-2xl overflow-hidden transform transition-all hover:scale-105 hover:shadow-blue-300 ${scrollDirection === 'sidescroll' ? 'flex-shrink-0 w-80 md:w-96' : 'w-full'}`}
                 >
-                    <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
+                    <div className={`w-full ${imageHeight} bg-gray-200 flex items-center justify-center`}>
                         {page.imageLoading ? <Spinner /> : <img src={page.imageUrl || ''} alt={page.title} className="w-full h-full object-cover" />}
                     </div>
                     <div className="p-4">
