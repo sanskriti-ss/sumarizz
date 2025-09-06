@@ -1,8 +1,5 @@
 {
-<<<<<<< HEAD
   "/_not-found/page": "app/_not-found/page.js",
-=======
->>>>>>> c0a384e6c37767d1c089659bab82190722afc63b
   "/api/generate-content/route": "app/api/generate-content/route.js",
   "/api/generate-image/route": "app/api/generate-image/route.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
