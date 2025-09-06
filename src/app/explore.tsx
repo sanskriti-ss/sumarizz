@@ -269,15 +269,15 @@ const App = () => {
             {bookshelf.map(book => (
               <div
                 key={book.id}
-                className="w-24 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer overflow-hidden group"
+                className="w-6 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer overflow-hidden group flex items-center justify-center"
                 onClick={() => openBook(book.id)}
                 title={book.topic}
+                style={{ backgroundColor: '#0a174e' }} // dark blue
               >
-                <div className="absolute inset-0 w-full h-full bg-indigo-700 group-hover:bg-indigo-900 transition-colors duration-300"></div>
-                <div className="absolute top-0 left-0 w-full h-full p-2 flex items-center justify-center transform rotate-90 origin-bottom-left whitespace-nowrap">
-                  <h3 className="text-white text-sm font-semibold leading-tight absolute transform -rotate-90 origin-bottom-left top-full left-0 mt-2 px-2">
+                <div className="flex items-center justify-center h-full w-full">
+                  <span className="text-white text-xs font-semibold" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.05em' }}>
                     {book.topic.slice(0, 15)}
-                  </h3>
+                  </span>
                 </div>
               </div>
             ))}
