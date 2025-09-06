@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const imageRateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 // Rate limit configuration for images (more restrictive due to cost)
-const IMAGE_RATE_LIMIT_MAX = 11; // requests per window
+const IMAGE_RATE_LIMIT_MAX = 30; // requests per window
 const IMAGE_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
 
 function getImageRateLimitStatus(identifier: string) {
@@ -29,24 +29,44 @@ function getImageRateLimitStatus(identifier: string) {
 function getClientIP(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   const realIP = request.headers.get('x-real-ip');
-  const remoteAddr = request.headers.get('remote-addr');
   
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  if (realIP) {
-    return realIP;
-  }
-  if (remoteAddr) {
-    return remoteAddr;
-  }
-  
+  if (forwarded) return forwarded.split(',')[0].trim();
+  if (realIP) return realIP;
   return 'anonymous';
+}
+
+// Fast image generation strategies
+function generateContextualImage(prompt: string, pageId: number): string {
+  // Create a seed based on prompt content for consistent images
+  const seed = Math.abs(prompt.split('').reduce((a: number, b: string) => a + b.charCodeAt(0), pageId));
+  
+  // Determine image category based on prompt content
+  const promptLower = prompt.toLowerCase();
+  let category = '';
+  
+  if (promptLower.includes('space') || promptLower.includes('star') || promptLower.includes('planet')) {
+    category = 'space/';
+  } else if (promptLower.includes('ocean') || promptLower.includes('sea') || promptLower.includes('water')) {
+    category = 'ocean/';
+  } else if (promptLower.includes('forest') || promptLower.includes('tree') || promptLower.includes('nature')) {
+    category = 'nature/';
+  } else if (promptLower.includes('city') || promptLower.includes('building') || promptLower.includes('urban')) {
+    category = 'city/';
+  } else if (promptLower.includes('animal') || promptLower.includes('wildlife')) {
+    category = 'animals/';
+  } else if (promptLower.includes('food') || promptLower.includes('cooking')) {
+    category = 'food/';
+  } else if (promptLower.includes('tech') || promptLower.includes('robot') || promptLower.includes('future')) {
+    category = 'tech/';
+  }
+  
+  // Use Unsplash for high-quality, contextual images
+  return `https://source.unsplash.com/600x400/?${category}story,illustration&sig=${seed}`;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Apply rate limiting (more restrictive for images)
+    // Apply rate limiting
     const identifier = getClientIP(request);
     const rateLimitResult = getImageRateLimitStatus(identifier);
     
