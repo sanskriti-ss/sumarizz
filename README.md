@@ -1,106 +1,36 @@
-# Sumarizz - Nature Paper Stories (Work in progress)
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Transform Nature paper summaries into interactive Storybook stories for frontend developers and designers.
+## Getting Started
 
-## 🚀 Features
-
-- **Import Summary**: Paste Nature paper summaries with optional DOI and tags
-- **AI Enhancement**: Get contextual snippets and curate before generation  
-- **Story Types**: 
-  - Explainer stories with sections
-  - Claim-Evidence analysis with confidence scores
-  - Timeline visualization of research progression
-  - Comparison tables for methods/results
-- **Export Formats**: Generate MDX and CSF files for Storybook
-- **Complete Project**: Download ready-to-run Storybook scaffold
-
-## 🛠 Tech Stack
-
-- **Next.js 14** with App Router
-- **TypeScript** for type safety
-- **Tailwind CSS** + **shadcn/ui** for styling
-- **Zustand** for state management
-- **MSW** for API mocking
-- **React Hook Form** + **Zod** for validation
-- **JSZip** for file generation
-
-## 📋 User Flow
-
-1. **New Project** (`/new`) - Paste paper summary, add tags
-2. **Enrich** (`/enrich`) - Review AI-suggested context snippets
-3. **Configure** (`/configure`) - Choose story type and options
-4. **Preview** (`/preview`) - Edit and review generated story
-5. **Export** (`/export`) - Download Storybook files
-
-## 🏃‍♂️ Getting Started
+First, run the development server:
 
 ```bash
-# Install dependencies
-npm install
-
-# Start development server
 npm run dev
-
-# Open http://localhost:3000
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-## 📁 Project Structure
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```
-src/
-├── app/                    # Next.js App Router pages
-│   ├── page.tsx           # Home page
-│   ├── new/               # Import summary
-│   ├── enrich/            # Curate snippets
-│   ├── configure/         # Story configuration
-│   ├── preview/           # Story preview & editing
-│   └── export/            # Export to Storybook
-├── components/
-│   ├── ui/                # Reusable UI components
-│   └── providers/         # Context providers
-├── mocks/                 # MSW API handlers
-├── store/                 # Zustand state management
-├── types/                 # TypeScript definitions
-└── lib/                   # Utilities
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## 🎯 Demo Flow
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-Try this sample Nature paper summary:
+## Learn More
 
-```
-This study presents a novel machine learning approach for genomic variant detection that achieves 12% improvement in accuracy over traditional methods. The algorithm combines deep learning with statistical analysis to process datasets of over 10 million genetic variants across diverse populations. Clinical validation shows promising results for rare disease diagnosis, with potential applications in precision medicine and personalized treatment strategies.
-```
+To learn more about Next.js, take a look at the following resources:
 
-## 🔧 Configuration
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-The app uses mock APIs by default. Key configurations:
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-- **Story Types**: Explainer, Claim-Evidence, Timeline, Comparison
-- **Export Formats**: MDX (recommended), CSF, or both
-- **Options**: Claim count, figures, glossary, tone
+## Deploy on Vercel
 
-## 📦 Export Output
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-Generated Storybook files include:
-
-- `stories/*.stories.mdx` - MDX story files
-- `stories/*.stories.tsx` - CSF story files  
-- `src/components/*.tsx` - React components
-- `README.md` - Setup instructions
-- `package.json` - Dependencies
-
-## 🚧 Development Notes
-
-- All APIs are mocked using MSW for hackathon demo
-- State persists in localStorage during development
-- Responsive design with dark mode support
-- Accessibility features (WCAG 2.1 AA target)
-
-## 📝 Next Steps
-
-1. Replace mock APIs with real services
-2. Add authentication and team collaboration
-3. Implement actual web scraping for enrichment
-4. Add more story types and export formats
-5. Integrate with Citation APIs for verification
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

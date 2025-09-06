@@ -1,0 +1,366 @@
+"use client";
+import React, { useState, useEffect } from 'react';
+
+// Types
+interface StoryPage {
+  id: number;
+  title: string;
+  content: string;
+  imageUrl?: string | null;
+  imageLoading?: boolean;
+}
+// Spinner Component for loading states
+const Spinner = () => (
+  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+);
+
+// Main App Component
+const App = () => {
+  const [topic, setTopic] = useState('');
+  const [step, setStep] = useState(1);
+  const [proficiency, setProficiency] = useState('');
+  const [source, setSource] = useState('');
+  const [textLength, setTextLength] = useState('');
+  const [scrollDirection, setScrollDirection] = useState('');
+  const [summary, setSummary] = useState('');
+  const [storybook, setStorybook] = useState<StoryPage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Reset error message whenever the step changes
+  useEffect(() => {
+    setErrorMessage('');
+  }, [step]);
+  
+  // --- API Call Logic ---
+
+  // A utility function for API calls with exponential backoff
+  const fetchWithBackoff = async (url: string, payload: any, retries = 3, delay = 1000): Promise<any> => {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      if (retries > 0) {
+        await new Promise(res => setTimeout(res, delay));
+        return fetchWithBackoff(url, payload, retries - 1, delay * 2);
+      } else {
+        console.error("API call failed after multiple retries:", error);
+        setErrorMessage("Sorry, something went wrong while contacting the AI. Please try again.");
+        setLoading(false);
+        throw error;
+    }
+  }
+  };
+
+  const generateSummary = async () => {
+    if (!proficiency || !source || !textLength || !scrollDirection) {
+      setErrorMessage("Please select all options.");
+      return;
+    }
+    setLoading(true);
+    setErrorMessage('');
+    setStep(3); // Move to loading step
+
+    const apiKey = process.env.GOOGLE_API_KEY; // API key for Next.js public environment variable
+    if (!apiKey) {
+        setErrorMessage("API key is not configured. Please set it in the environment variables.");
+        setLoading(false);
+        setStep(2); // Go back to the form
+        return;
+    }
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+    
+    const systemPrompt = `You are an expert researcher. Your task is to provide a concise, single-paragraph summary of a topic based on a specified source and for a specific audience.`;
+    const userQuery = `Identify the core concepts about "${topic}". Generate a text summary explaining these concepts and theories for a ${proficiency} level audience, assuming the information comes from a ${source}.`;
+
+    const payload = {
+      contents: [{ parts: [{ text: userQuery }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+    };
+
+    try {
+      const result = await fetchWithBackoff(apiUrl, payload);
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        setSummary(text);
+        setStep(4);
+      } else {
+        throw new Error("Invalid response structure from summary API.");
+      }
+    } catch (error) {
+      setStep(2); // Go back to the form if it fails
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateSpecificImagePrompt = async (storyContent: string) => {
+    const textApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY; // API key for Next.js public environment variable
+    const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${textApiKey}`;
+
+    const prompt = `Given the following storybook page description: "${storyContent}", create a single, detailed visual description for a comic book panel illustration. Break down the scene into 1-3 distinct panels, focusing on the visual elements and actions. The output should be a single string combining these descriptions, e.g., "Panel 1: [description]. Panel 2: [description]..."`;
+
+    const payload = {
+      contents: [{ parts: [{ text: prompt }] }],
+    };
+
+    try {
+      const result = await fetchWithBackoff(textApiUrl, payload);
+      return result.candidates?.[0]?.content?.parts?.[0]?.text || storyContent;
+    } catch (error) {
+      console.error("Failed to generate specific image prompt:", error);
+      return storyContent; // Fallback to original content
+    }
+  };
+
+  const generateStorybook = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    setStep(5); // Go directly to the storybook view
+  
+    const textApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY; // API key for Next.js public environment variable
+    const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${textApiKey}`;
+    
+    const numPages = textLength === 'Full Chapter' ? 30 : 5;
+    let pageContentPrompt;
+    if (proficiency === 'Expert') {
+      pageContentPrompt = textLength === 'Short (5 Pages with Quick Sentences)'
+        ? "a concise, two-sentence explanation."
+        : "a detailed, complex paragraph focusing on a specific sub-topic.";
+    } else {
+      pageContentPrompt = textLength === 'Short (5 Pages with Quick Sentences)'
+        ? "exactly two sentences."
+        : "a short paragraph.";
+    }
+
+    const storyPrompt = proficiency === 'Expert'
+      ? `Based on the following summary: "${summary}", provide a ${numPages}-part analytical breakdown of "${topic}". Each part should be an object with a unique "id", a "title", and ${pageContentPrompt} The content should be written in a formal, academic tone, suitable for a technical paper.`
+      : `Based on the following summary: "${summary}", create a ${numPages}-page storybook about "${topic}". Each page should be an object with a unique "id", a "title", and ${pageContentPrompt} The content should describe a visual scene.`;
+
+    
+    const textPayload = {
+        contents: [{ parts: [{ text: storyPrompt }] }],
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        "id": { "type": "NUMBER" },
+                        "title": { "type": "STRING" },
+                        "content": { "type": "STRING" }
+                    },
+                    required: ["id", "title", "content"]
+                }
+            }
+        }
+    };
+
+    try {
+        const result = await fetchWithBackoff(textApiUrl, textPayload);
+        const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) throw new Error("Failed to generate story content.");
+        
+        // The LLM returns a JSON string, so we must parse it.
+        const storyPages = JSON.parse(jsonText);
+
+        const initialStorybookState = storyPages.map((page: any) => ({
+            ...page,
+            imageUrl: null,
+            imageLoading: true
+        }));
+        setStorybook(initialStorybookState);
+        setLoading(false); // Main loading is done, now load images individually
+
+        // Fetch images for each page
+        storyPages.forEach(async (page: any) => {
+          const specificPrompt = await generateSpecificImagePrompt(page.content);
+          generateImageForPage(page.id, specificPrompt);
+        });
+
+    } catch (error) {
+        setErrorMessage("Failed to generate the story's text. Please try again.");
+        setStep(4); // Go back
+    }
+  };
+
+  const generateImageForPage = async (pageId: number, imagePrompt: string) => {
+    const imageApiKey = process.env.GOOGLE_API_KEY; // API key for Next.js public environment variable
+    const imageApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${imageApiKey}`;
+    
+    const finalPrompt = `A high-quality, visually stunning comic book panel illustration for a storybook. ${imagePrompt}. Focus on vibrant, digital art with clear outlines and a dynamic composition.`;
+    
+    const imagePayload = { 
+        instances: [{ prompt: finalPrompt }],
+        parameters: { "sampleCount": 1 }
+    };
+
+    try {
+        const result = await fetchWithBackoff(imageApiUrl, imagePayload);
+        const base64Data = result.predictions?.[0]?.bytesBase64Encoded;
+
+        if (base64Data) {
+            const imageUrl = `data:image/png;base64,${base64Data}`;
+            setStorybook(prev => prev.map(p => p.id === pageId ? { ...p, imageUrl, imageLoading: false } : p));
+        } else {
+            throw new Error("Invalid image data structure.");
+        }
+    } catch (error) {
+        console.error(`Failed to generate image for page ${pageId}:`, error);
+        // Set a placeholder on failure
+        setStorybook(prev => prev.map(p => p.id === pageId ? { ...p, imageUrl: `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`, imageLoading: false } : p));
+    }
+  };
+
+
+  // --- Render Logic ---
+
+  const renderStep = () => {
+    if (loading && (step === 3 || (step === 5 && storybook.length === 0))) {
+        return (
+          <div className="text-center flex flex-col items-center justify-center text-white">
+            <h2 className="text-2xl font-bold mb-4">
+                {step === 3 ? "Generating Text Summary..." : "Crafting your story..."}
+            </h2>
+            <Spinner />
+          </div>
+        );
+    }
+    
+    switch (step) {
+      case 1:
+        return (
+          <div className="w-full max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">What topic are you interested in?</h2>
+            <form onSubmit={(e) => { e.preventDefault(); if (topic) setStep(2); }}>
+              <input
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-gray-900"
+                placeholder="e.g., Quantum Computing, Stoic Philosophy..."
+              />
+              <button
+                type="submit"
+                disabled={!topic}
+                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
+              >
+                Next
+              </button>
+            </form>
+          </div>
+        );
+      case 2:
+        return (
+          <div className="w-full max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">
+            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Scope of your Topic</h2>
+            <div className="space-y-6">
+                <div>
+                    <label className="block text-gray-700 font-semibold mb-2">Proficiency Level</label>
+                    <select value={proficiency} onChange={(e) => setProficiency(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                      <option value="">Select a level...</option>
+                      <option value="Beginner">Beginner (New to the topic)</option>
+                      <option value="Intermediate">Intermediate (Somewhat proficient)</option>
+                      <option value="Expert">Expert (Deep knowledge)</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-gray-700 font-semibold mb-2">Preferred Source</label>
+                    <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                      <option value="">Select a source type...</option>
+                      <option value="Academic Papers">Academic Papers (e.g., Nature)</option>
+                      <option value="Existing Newsletters">Existing Newsletters (e.g., Lenny's Newsletter)</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-gray-700 font-semibold mb-2">Text Output Length</label>
+                    <select value={textLength} onChange={(e) => setTextLength(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                      <option value="">Select length...</option>
+                      <option value="Short (5 pages with Detailed Paragraphs)">Short (5 pages with Detailed Paragraphs)</option>
+                      <option value="Short (5 Pages with Quick Sentences)">Short (5 Pages with Quick Sentences)</option>
+                      <option value="Full Chapter">Full Chapter (30 pages)</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-gray-700 font-semibold mb-2">Scroll Direction</label>
+                    <select value={scrollDirection} onChange={(e) => setScrollDirection(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                      <option value="">Select a direction...</option>
+                      <option value="sidescroll">Side Scroll</option>
+                      <option value="downscroll">Down Scroll</option>
+                    </select>
+                </div>
+            </div>
+            {errorMessage && <p className="text-red-500 text-center mt-4">{errorMessage}</p>}
+            <button onClick={generateSummary} className="w-full mt-8 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all transform hover:scale-105">
+                Generate Summary
+            </button>
+          </div>
+        );
+      case 4:
+        return (
+          <div className="w-full max-w-2xl mx-auto bg-gray-800 text-white p-8 rounded-xl shadow-lg text-center">
+            <h2 className="text-2xl font-bold mb-4">Generated Text Summary</h2>
+            <p className="bg-gray-900 text-gray-200 p-6 rounded-lg mb-6 text-left">{summary}</p>
+            {errorMessage && <p className="text-red-500 text-center mb-4">{errorMessage}</p>}
+            <button onClick={generateStorybook} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-all transform hover:scale-105">
+              Generate {textLength === 'Full Chapter' ? '30-page' : '5-page'} Storybook
+            </button>
+          </div>
+        );
+      case 5:
+        const scrollClasses = scrollDirection === 'sidescroll' 
+          ? 'flex overflow-x-auto space-x-6 p-4 rounded-xl' 
+          : 'flex flex-col space-y-6 p-4 rounded-xl';
+        
+        return (
+          <div className="w-full">
+            <h2 className="text-3xl font-bold mb-2 text-center text-white">Your Story: {topic}</h2>
+            <p className="text-center text-gray-300 mb-6">
+                {scrollDirection === 'sidescroll' ? 'Scroll horizontally to view your comic book.' : 'Scroll down to view your comic book.'}
+            </p>
+            <div className={`${scrollClasses} bg-gray-900/20 backdrop-blur-sm`}>
+              {storybook.map((page, index) => (
+                <div 
+                  key={page.id || index} 
+                  className={`bg-white rounded-lg shadow-2xl overflow-hidden transform transition-all hover:scale-105 hover:shadow-blue-300 ${scrollDirection === 'sidescroll' ? 'flex-shrink-0 w-80 md:w-96' : 'w-full'}`}
+                >
+                    <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
+                        {page.imageLoading ? <Spinner /> : <img src={page.imageUrl || ''} alt={page.title} className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="p-4">
+                        <h3 className="text-lg font-bold text-gray-800">{index + 1}. {page.title}</h3>
+                        <p className="text-gray-600 mt-2 text-sm">{page.content}</p>
+                    </div>
+                </div>
+              ))}
+            </div>
+             <button onClick={() => { setStep(1); setTopic(''); setProficiency(''); setSource(''); setStorybook([]); }} className="block mx-auto mt-8 bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+              Start Over
+            </button>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen font-sans flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-purple-900 to-black text-white">
+      <div className="w-full max-w-5xl">
+        {step !== 5 && <h1 className="text-4xl font-bold text-center mb-8">Interactive Story Generator</h1>}
+        {renderStep()}
+      </div>
+    </div>
+  );
+};
+
+export default App;
