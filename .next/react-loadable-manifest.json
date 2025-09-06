@@ -1,0 +1,12 @@
+{
+  "..\\node_modules\\msw\\lib\\core\\utils\\internal\\parseGraphQLRequest.mjs -> graphql": {
+    "id": "..\\node_modules\\msw\\lib\\core\\utils\\internal\\parseGraphQLRequest.mjs -> graphql",
+    "files": []
+  },
+  "components\\providers\\MSWProvider.tsx -> @/mocks/browser": {
+    "id": "components\\providers\\MSWProvider.tsx -> @/mocks/browser",
+    "files": [
+      "static/chunks/_app-pages-browser_src_mocks_browser_ts.js"
+    ]
+  }
+}
