@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, addDoc, onSnapshot, query, where } from 'firebase/firestore';
 
 // Spinner Component for loading states
 const Spinner = () => (
@@ -17,6 +20,63 @@ const App = () => {
   const [storybook, setStorybook] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [savedStories, setSavedStories] = useState([]);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [db, setDb] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [userId, setUserId] = useState(null);
+
+  // Firebase Initialization and Authentication
+  useEffect(() => {
+    try {
+      const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+      const app = initializeApp(firebaseConfig);
+      const authInstance = getAuth(app);
+      const dbInstance = getFirestore(app);
+      setAuth(authInstance);
+      setDb(dbInstance);
+
+      onAuthStateChanged(authInstance, async (user) => {
+        if (user) {
+          setUserId(user.uid);
+          setIsAuthReady(true);
+        } else {
+          try {
+            if (typeof __initial_auth_token !== 'undefined') {
+              await signInWithCustomToken(authInstance, __initial_auth_token);
+            } else {
+              await signInAnonymously(authInstance);
+            }
+          } catch (error) {
+            console.error("Firebase authentication failed:", error);
+            setIsAuthReady(true);
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Firebase initialization failed:", error);
+      setIsAuthReady(true);
+    }
+  }, []);
+
+  // Fetch saved stories from Firestore
+  useEffect(() => {
+    if (db && isAuthReady && userId) {
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      const storiesCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/stories`);
+      const q = query(storiesCollectionRef);
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const stories = [];
+        snapshot.forEach((doc) => {
+          stories.push({ id: doc.id, ...doc.data() });
+        });
+        setSavedStories(stories);
+      }, (error) => {
+        console.error("Error fetching stories:", error);
+      });
+      return () => unsubscribe();
+    }
+  }, [db, isAuthReady, userId]);
 
   // Reset error message whenever the step changes
   useEffect(() => {
@@ -114,20 +174,14 @@ const App = () => {
     const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${textApiKey}`;
     
     const numPages = textLength === 'Full Chapter' ? 30 : 5;
-    let pageContentPrompt;
-    if (proficiency === 'Expert') {
-      pageContentPrompt = textLength === 'Short (5 Pages with Quick Sentences)'
-        ? "a concise, two-sentence explanation."
-        : "a detailed, complex paragraph focusing on a specific sub-topic.";
-    } else {
-      pageContentPrompt = textLength === 'Short (5 Pages with Quick Sentences)'
-        ? "exactly two sentences."
-        : "a short paragraph.";
-    }
+    const isExpert = proficiency === 'Expert';
+    const contentStyle = isExpert
+      ? (textLength === 'Short (5 Pages with Quick Sentences)' ? "a concise, two-sentence explanation." : "a detailed, complex paragraph focusing on a specific sub-topic.")
+      : (textLength === 'Short (5 Pages with Quick Sentences)' ? "exactly two sentences describing a part of the story." : "a short paragraph describing a visual scene.");
 
-    const storyPrompt = proficiency === 'Expert'
-      ? `Based on the following summary: "${summary}", provide a ${numPages}-part analytical breakdown of "${topic}". Each part should be an object with a unique "id", a "title", and ${pageContentPrompt} The content should be written in a formal, academic tone, suitable for a technical paper.`
-      : `Based on the following summary: "${summary}", create a ${numPages}-page storybook about "${topic}". Each page should be an object with a unique "id", a "title", and ${pageContentPrompt} The content should describe a visual scene.`;
+    const storyPrompt = isExpert
+      ? `Based on the following summary: "${summary}", provide a ${numPages}-part analytical breakdown of "${topic}". Each part should be an object with a unique "id", a "title", and ${contentStyle} The content should be written in a formal, academic tone, suitable for a technical paper.`
+      : `Based on the following summary: "${summary}", create a ${numPages}-page storybook about "${topic}". Each page should be an object with a unique "id", a "title", and ${contentStyle} The content should be a cohesive part of the overall narrative, suitable for a children's storybook.`;
 
     
     const textPayload = {
@@ -205,6 +259,50 @@ const App = () => {
     }
   };
 
+  const saveStory = async () => {
+    if (db && userId) {
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      try {
+        await addDoc(collection(db, `artifacts/${appId}/users/${userId}/stories`), {
+          topic: topic,
+          summary: summary,
+          proficiency: proficiency,
+          textLength: textLength,
+          scrollDirection: scrollDirection,
+          pages: storybook, // Now saving the entire storybook array
+          createdAt: new Date(),
+        });
+        console.log("Story saved successfully!");
+      } catch (e) {
+        console.error("Error adding document: ", e);
+      }
+    }
+    setStep(1);
+    setTopic('');
+    setProficiency('');
+    setSource('');
+    setStorybook([]);
+  };
+
+  const loadStory = (story) => {
+    setTopic(story.topic);
+    setSummary(story.summary);
+    setProficiency(story.proficiency);
+    setSource(story.source);
+    setTextLength(story.textLength);
+    setScrollDirection(story.scrollDirection);
+    setStorybook(story.pages);
+    setStep(5);
+  };
+
+  const returnHome = () => {
+    setStep(1);
+    setTopic('');
+    setProficiency('');
+    setSource('');
+    setStorybook([]);
+  };
+
 
   // --- Render Logic ---
 
@@ -223,24 +321,58 @@ const App = () => {
     switch (step) {
       case 1:
         return (
-          <div className="w-full max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">
-            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">What topic are you interested in?</h2>
-            <form onSubmit={(e) => { e.preventDefault(); if (topic) setStep(2); }}>
-              <input
-                type="text"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-gray-900"
-                placeholder="e.g., Quantum Computing, Stoic Philosophy..."
-              />
-              <button
-                type="submit"
-                disabled={!topic}
-                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
-              >
-                Next
-              </button>
-            </form>
+          <div className="w-full max-w-lg mx-auto p-8 rounded-xl">
+             <div className="relative mb-8 bg-gray-900/40 backdrop-blur-sm rounded-xl p-6 shadow-2xl overflow-hidden min-h-[250px]">
+                <div className="absolute inset-0 z-0">
+                    <div className="h-full w-full bg-gradient-to-t from-gray-900/60 to-transparent"></div>
+                </div>
+                {isAuthReady && savedStories.length > 0 ? (
+                    <div className="flex flex-wrap justify-center gap-4 relative z-10">
+                        {savedStories.map(story => (
+                            <div
+                                key={story.id}
+                                className="w-12 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer"
+                                onClick={() => loadStory(story)}
+                                title={story.topic}
+                                style={{
+                                    backgroundImage: `url('https://images.vexels.com/media/users/3/286663/isolated/preview/ae7fcb5050a3c8a7e2800a3c9a50bf32-bordeaux-book-spine-color-stroke.png')`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    backgroundRepeat: 'no-repeat',
+                                }}
+                            >
+                                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs p-2 [writing-mode:vertical-rl] text-right">
+                                    {story.topic.split(' ').slice(0, 3).join(' ')}
+                                </div>
+                                <div className="absolute inset-0 rounded-lg border-2 border-gray-600/50"></div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-gray-300 text-center relative z-10">
+                        {isAuthReady ? "Your bookshelf is empty. Start a story to save it here!" : "Loading your bookshelf..."}
+                    </p>
+                )}
+            </div>
+            <div className="w-full max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">
+                <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">What topic are you interested in?</h2>
+                <form onSubmit={(e) => { e.preventDefault(); if (topic) setStep(2); }}>
+                  <input
+                    type="text"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-gray-900"
+                    placeholder="e.g., Quantum Computing, Stoic Philosophy..."
+                  />
+                  <button
+                    type="submit"
+                    disabled={!topic}
+                    className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
+                  >
+                    Next
+                  </button>
+                </form>
+            </div>
           </div>
         );
       case 2:
@@ -327,9 +459,14 @@ const App = () => {
                 </div>
               ))}
             </div>
-             <button onClick={() => { setStep(1); setTopic(''); setProficiency(''); setSource(''); setStorybook([]); }} className="block mx-auto mt-8 bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
-              Start Over
-            </button>
+             <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4 mt-8">
+                <button onClick={saveStory} className="bg-green-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+                    Save Story
+                </button>
+                <button onClick={returnHome} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+                    Return to Home
+                </button>
+            </div>
           </div>
         );
       default:
