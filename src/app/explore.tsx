@@ -393,6 +393,32 @@ const App = () => {
                 title={book.topic}
                 style={{ backgroundColor: bookshelfColors[idx % bookshelfColors.length] }}
               >
+                {/* Top black band */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 10,
+                    left: 0,
+                    right: 0,
+                    height: 8,
+                    background: 'rgba(0,0,0,0.5)',
+                    borderRadius: '4px',
+                    zIndex: 2,
+                  }}
+                />
+                {/* Bottom black band */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 10,
+                    left: 0,
+                    right: 0,
+                    height: 8,
+                    background: 'rgba(0,0,0,0.5)',
+                    borderRadius: '4px',
+                    zIndex: 2,
+                  }}
+                />
                 <div className="flex items-center justify-center h-full w-full">
                   <span className="text-white text-xs font-semibold" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.05em' }}>
                     {book.topic.slice(0, 15)}
