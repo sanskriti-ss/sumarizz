@@ -510,8 +510,8 @@ const App = () => {
     <div className="min-h-screen font-sans flex items-center justify-center p-4" style={{ backgroundImage: "url('https://wallpapers.com/images/hd/clear-view-of-blue-and-purple-galaxy-vqbu4jz7r0gwd616.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
       <div className="w-full max-w-5xl">
         {step !== 5 && (
-          <div className="w-full max-w-2xl mx-auto mb-8 bg-black/70 rounded-xl shadow-lg p-6">
-            <h1 className="text-4xl font-bold text-center text-white">Interactive Story Generator</h1>
+          <div className="w-full max-w-5xl mx-auto mb-8 bg-black/70 rounded-xl shadow-lg p-6">
+            <h1 className="text-4xl font-bold text-center text-white">Learn anything. <br /> Generate your own comics for any topic.</h1>
           </div>
         )}
         {renderStep()}
