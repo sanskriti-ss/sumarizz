@@ -26,6 +26,8 @@ const App = () => {
   const [storybook, setStorybook] = useState<StoryPage[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [bookshelf, setBookshelf] = useState<{ id: number; topic: string; summary: string; storybook: StoryPage[] }[]>([]);
+  const [viewingBookId, setViewingBookId] = useState<number | null>(null);
 
   // Reset error message whenever the step changes
   useEffect(() => {
@@ -206,8 +208,83 @@ const App = () => {
     }
   };
 
+  // Save Story handler
+  const saveStory = () => {
+    const bookId = Date.now();
+    setBookshelf(prev => [
+      ...prev,
+      {
+        id: bookId,
+        topic: topic,
+        summary: summary,
+        storybook: storybook
+      }
+    ]);
+    setStep(1);
+    setTopic('');
+    setProficiency('Beginner');
+    setSource('Academic Papers');
+    setTextLength('Short (5 Pages with Quick Sentences)');
+    setScrollDirection('sidescroll');
+    setStorybook([]);
+  };
+
+  // Bookshelf click handler
+  const openBook = (id: number) => {
+    setViewingBookId(id);
+    setStep(6);
+  };
 
   // --- Render Logic ---
+  const renderBookshelf = () => (
+    <div className="flex flex-row space-x-4 mt-8 justify-center">
+      {bookshelf.map(book => (
+        <div
+          key={book.id}
+          className="bg-indigo-700 hover:bg-indigo-900 text-white rounded-lg shadow-lg cursor-pointer flex items-center justify-center h-24 w-8 text-xs font-bold"
+          title={book.topic}
+          onClick={() => openBook(book.id)}
+        >
+          {book.topic.slice(0, 15)}
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderBookshelfCard = () => (
+    <div className="relative bg-gray-900/40 backdrop-blur-sm rounded-xl p-6 shadow-2xl overflow-hidden h-full flex flex-col justify-center">
+      <div className="absolute inset-0 z-0">
+        <div className="h-full w-full bg-gradient-to-t from-gray-900/60 to-transparent"></div>
+      </div>
+      <div className="relative w-full h-64 flex-1 flex flex-col justify-center">
+        {bookshelf.length > 0 ? (
+          <div className="flex flex-wrap justify-center gap-4 relative z-10 items-center h-full">
+            {bookshelf.map(book => (
+              <div
+                key={book.id}
+                className="w-24 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer overflow-hidden group"
+                onClick={() => openBook(book.id)}
+                title={book.topic}
+              >
+                <div className="absolute inset-0 w-full h-full bg-indigo-700 group-hover:bg-indigo-900 transition-colors duration-300"></div>
+                <div className="absolute top-0 left-0 w-full h-full p-2 flex items-center justify-center transform rotate-90 origin-bottom-left whitespace-nowrap">
+                  <h3 className="text-white text-sm font-semibold leading-tight absolute transform -rotate-90 origin-bottom-left top-full left-0 mt-2 px-2">
+                    {book.topic.slice(0, 15)}
+                  </h3>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-300 text-center relative z-10">
+              Your bookshelf is empty. Create a story to fill it!
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   const renderStep = () => {
     if (loading && (step === 3 || (step === 5 && storybook.length === 0))) {
@@ -224,24 +301,33 @@ const App = () => {
     switch (step) {
       case 1:
         return (
-          <div className="w-full max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">
-            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">What topic are you interested in?</h2>
-            <form onSubmit={(e) => { e.preventDefault(); if (topic) setStep(2); }}>
-              <input
-                type="text"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-gray-900"
-                placeholder="e.g., Quantum Computing, Stoic Philosophy..."
-              />
-              <button
-                type="submit"
-                disabled={!topic}
-                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed transform hover:scale-105"
-              >
-                Next
-              </button>
-            </form>
+          <div className="w-full max-w-5xl mx-auto flex flex-col md:flex-row gap-8">
+            <div className="flex-1 flex items-stretch">
+              <div className="w-full h-full flex flex-col justify-center">
+                <div className="h-full">
+                  {renderBookshelfCard()}
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 w-full max-w-2xl mx-auto bg-gray-900 p-8 rounded-xl shadow-lg flex flex-col justify-center h-full">
+              <h2 className="text-2xl font-bold mb-6 text-center text-white">What topic are you interested in?</h2>
+              <form onSubmit={(e) => { e.preventDefault(); if (topic) setStep(2); }} className="flex flex-col gap-4">
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-700 bg-gray-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition placeholder-gray-400"
+                  placeholder="e.g., Quantum Computing, Stoic Philosophy..."
+                />
+                <button
+                  type="submit"
+                  disabled={!topic}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all disabled:bg-gray-700 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  Next
+                </button>
+              </form>
+            </div>
           </div>
         );
       case 2:
@@ -328,8 +414,42 @@ const App = () => {
                 </div>
               ))}
             </div>
-             <button onClick={() => { setStep(1); setTopic(''); setProficiency(''); setSource(''); setStorybook([]); }} className="block mx-auto mt-8 bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
-              Start Over
+            <div className="flex flex-row justify-center gap-4 mt-8">
+              <button onClick={() => { setStep(1); setTopic(''); setProficiency('Beginner'); setSource('Academic Papers'); setTextLength('Short (5 Pages with Quick Sentences)'); setScrollDirection('sidescroll'); setStorybook([]); }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+                Start Over
+              </button>
+              <button onClick={saveStory} className="bg-green-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+                Save Story
+              </button>
+            </div>
+          </div>
+        );
+      case 6:
+        // Viewing a saved book
+        const book = bookshelf.find(b => b.id === viewingBookId);
+        if (!book) return null;
+        return (
+          <div className="w-full">
+            <h2 className="text-3xl font-bold mb-2 text-center text-white">Your Story: {book.topic}</h2>
+            <p className="text-center text-gray-300 mb-6">(Saved Story)</p>
+            <div className={`${scrollDirection === 'sidescroll' ? 'flex overflow-x-auto space-x-6 p-4 rounded-xl' : 'flex flex-col space-y-6 p-4 rounded-xl'} bg-gray-900/20 backdrop-blur-sm`}>
+              {book.storybook.map((page, index) => (
+                <div 
+                  key={page.id || index} 
+                  className={`bg-white rounded-lg shadow-2xl overflow-hidden transform transition-all hover:scale-105 hover:shadow-blue-300 ${scrollDirection === 'sidescroll' ? 'flex-shrink-0 w-80 md:w-96' : 'w-full'}`}
+                >
+                    <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
+                        {page.imageLoading ? <Spinner /> : <img src={page.imageUrl || ''} alt={page.title} className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="p-4">
+                        <h3 className="text-lg font-bold text-gray-800">{index + 1}. {page.title}</h3>
+                        <p className="text-gray-600 mt-2 text-sm">{page.content}</p>
+                    </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => { setStep(1); setViewingBookId(null); }} className="block mx-auto mt-8 bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+              Back to Home
             </button>
           </div>
         );
@@ -339,9 +459,13 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen font-sans flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-purple-900 to-black text-white">
+    <div className="min-h-screen font-sans flex items-center justify-center p-4" style={{ backgroundImage: "url('https://wallpapers.com/images/hd/clear-view-of-blue-and-purple-galaxy-vqbu4jz7r0gwd616.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
       <div className="w-full max-w-5xl">
-        {step !== 5 && <h1 className="text-4xl font-bold text-center mb-8">Interactive Story Generator</h1>}
+        {step !== 5 && (
+          <div className="w-full max-w-2xl mx-auto mb-8 bg-black/70 rounded-xl shadow-lg p-6">
+            <h1 className="text-4xl font-bold text-center text-white">Interactive Story Generator</h1>
+          </div>
+        )}
         {renderStep()}
       </div>
     </div>
