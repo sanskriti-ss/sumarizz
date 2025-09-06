@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const imageRateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 // Rate limit configuration for images (more restrictive due to cost)
-const IMAGE_RATE_LIMIT_MAX = 35; // requests per window
+const IMAGE_RATE_LIMIT_MAX = 11; // requests per window
 const IMAGE_RATE_LIMIT_WINDOW = 60 * 1000; // 60 seconds
 
 function getImageRateLimitStatus(identifier: string) {
@@ -99,7 +99,6 @@ export async function POST(request: NextRequest) {
 
     try {
       // Try to use Gemini's multimodal capabilities for image generation
-      // Note: This uses a text-to-image approach with Gemini
       
       const imageGenerationPrompt = `Generate an image: ${enhancedPrompt}`;
       

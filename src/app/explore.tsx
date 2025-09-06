@@ -88,7 +88,14 @@ const App = () => {
     setStep(5); // Go directly to the storybook view
 
     // Determine number of pages based on text length selection
-    const pageCount = textLength === 'Full Chapter' ? 30 : 5;
+    let pageCount;
+    if (textLength === 'Full Chapter') {
+      pageCount = 30;
+    } else if (textLength === 'Medium (11 pages)') {
+      pageCount = 11;
+    } else {
+      pageCount = 5; // Default for both short options
+    }
 
     try {
       const response = await fetch('/api/generate-content', {
@@ -272,6 +279,7 @@ const App = () => {
                       <option value="">Select length...</option>
                       <option value="Short (5 pages with Detailed Paragraphs)">Short (5 pages with Detailed Paragraphs)</option>
                       <option value="Short (5 Pages with Quick Sentences)">Short (5 Pages with Quick Sentences)</option>
+                      <option value="Medium (11 pages)">Medium (11 pages)</option>
                       <option value="Full Chapter">Full Chapter (30 pages)</option>
                     </select>
                 </div>
@@ -297,7 +305,7 @@ const App = () => {
             <p className="bg-gray-900 text-gray-200 p-6 rounded-lg mb-6 text-left">{summary}</p>
             {errorMessage && <p className="text-red-500 text-center mb-4">{errorMessage}</p>}
             <button onClick={generateStorybook} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-all transform hover:scale-105">
-              Generate {textLength === 'Full Chapter' ? '30-page' : '5-page'} Storybook
+              Generate {textLength === 'Full Chapter' ? '30-page' : textLength === 'Medium (11 pages)' ? '11-page' : '5-page'} Storybook
             </button>
           </div>
         );
