@@ -1,14 +1,9 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { useBookshelfStore, type StoryPage, type BookshelfItem, clearCorruptedStorage } from '../store/bookshelfStore';
+import { useSessionStore } from '../store/sessionStore';
 
-// Types
-interface StoryPage {
-  id: number;
-  title: string;
-  content: string;
-  imageUrl?: string | null;
-  imageLoading?: boolean;
-}
+// Types are now imported from the store
 // Spinner Component for loading states
 const Spinner = () => (
   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
@@ -17,17 +12,48 @@ const Spinner = () => (
 // Main App Component
 const App = () => {
   const [topic, setTopic] = useState('');
-  const [step, setStep] = useState(1);
   const [proficiency, setProficiency] = useState('Beginner');
   const [source, setSource] = useState('Academic Papers');
   const [textLength, setTextLength] = useState('Short (5 Pages with Quick Sentences)');
   const [scrollDirection, setScrollDirection] = useState('sidescroll');
   const [summary, setSummary] = useState('');
-  const [storybook, setStorybook] = useState<StoryPage[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [bookshelf, setBookshelf] = useState<{ id: number; topic: string; summary: string; storybook: StoryPage[] }[]>([]);
   const [viewingBookId, setViewingBookId] = useState<number | null>(null);
+
+  // Use Zustand stores
+  const { bookshelf, addBook, removeBook, getBook, updateBookImages } = useBookshelfStore();
+  const { 
+    currentStorybook: storybook, 
+    currentTopic: sessionTopic,
+    currentSummary: sessionSummary,
+    currentStep: step,
+    setCurrentStorybook: setStorybook,
+    setCurrentTopic: setSessionTopic,
+    setCurrentSummary: setSessionSummary,
+    setCurrentStep: setStep,
+    updatePageImage,
+    clearSession
+  } = useSessionStore();
+
+  // Sync local state with session store and update session store when local state changes
+  useEffect(() => {
+    if (sessionTopic) setTopic(sessionTopic);
+    if (sessionSummary) setSummary(sessionSummary);
+  }, [sessionTopic, sessionSummary]);
+
+  // Update session store when topic or summary changes
+  useEffect(() => {
+    setSessionTopic(topic);
+  }, [topic, setSessionTopic]);
+
+  useEffect(() => {
+    setSessionSummary(summary);
+  }, [summary, setSessionSummary]);
+
+  useEffect(() => {
+    setStep(step);
+  }, [step, setStep]);
 
   // Color palette for bookshelf
   const bookshelfColors = [
@@ -47,6 +73,17 @@ const App = () => {
   useEffect(() => {
     setErrorMessage('');
   }, [step]);
+
+  // Initialize and handle corrupted storage
+  useEffect(() => {
+    try {
+      // Test if we can access localStorage
+      localStorage.getItem('test');
+    } catch (error) {
+      console.warn('localStorage issue detected, clearing corrupted data');
+      clearCorruptedStorage();
+    }
+  }, []);
 
   const generateSummary = async () => {
     if (!proficiency || !source || !textLength || !scrollDirection) {
@@ -210,44 +247,104 @@ const App = () => {
       }
 
       if (data.success && data.imageUrl) {
-        setStorybook(prev => prev.map(p => 
-          p.id === pageId ? { ...p, imageUrl: data.imageUrl, imageLoading: false } : p
-        ));
+        updatePageImage(pageId, data.imageUrl);
       } else {
         throw new Error("Invalid response from image API");
       }
     } catch (error) {
       console.error(`Failed to generate image for page ${pageId}:`, error);
       // Set a placeholder on failure
-      setStorybook(prev => prev.map(p => 
-        p.id === pageId ? { 
-          ...p, 
-          imageUrl: `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`, 
-          imageLoading: false 
-        } : p
-      ));
+      updatePageImage(pageId, `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`);
     }
   };
 
   // Save Story handler
   const saveStory = () => {
-    const bookId = Date.now();
-    setBookshelf(prev => [
-      ...prev,
-      {
-        id: bookId,
-        topic: topic,
-        summary: summary,
-        storybook: storybook
-      }
-    ]);
+    addBook({
+      topic: topic,
+      summary: summary,
+      storybook: storybook
+    });
+    
+    // Clear session and reset to initial state
+    clearSession();
     setStep(1);
     setTopic('');
     setProficiency('Beginner');
     setSource('Academic Papers');
     setTextLength('Short (5 Pages with Quick Sentences)');
     setScrollDirection('sidescroll');
-    setStorybook([]);
+    setSummary('');
+  };
+
+  // Regenerate images for a saved book
+  const regenerateBookImages = async (bookId: number) => {
+    const book = getBook(bookId);
+    if (!book) return;
+
+    // First, mark all pages as loading
+    const updatedStorybook = book.storybook.map(page => ({
+      ...page,
+      imageLoading: true,
+      imageUrl: null
+    }));
+    updateBookImages(bookId, updatedStorybook);
+
+    // Generate images for each page
+    for (const page of book.storybook) {
+      try {
+        const response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: page.content,
+            pageId: page.id
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success && data.imageUrl) {
+          // Update the specific page in the book
+          const currentBook = getBook(bookId);
+          if (currentBook) {
+            const newStorybook = currentBook.storybook.map(p =>
+              p.id === page.id ? { ...p, imageUrl: data.imageUrl, imageLoading: false } : p
+            );
+            updateBookImages(bookId, newStorybook);
+          }
+        } else {
+          // Handle failure
+          const currentBook = getBook(bookId);
+          if (currentBook) {
+            const newStorybook = currentBook.storybook.map(p =>
+              p.id === page.id ? { 
+                ...p, 
+                imageUrl: `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`, 
+                imageLoading: false 
+              } : p
+            );
+            updateBookImages(bookId, newStorybook);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to generate image for page ${page.id}:`, error);
+        // Handle error case
+        const currentBook = getBook(bookId);
+        if (currentBook) {
+          const newStorybook = currentBook.storybook.map(p =>
+            p.id === page.id ? { 
+              ...p, 
+              imageUrl: `https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed`, 
+              imageLoading: false 
+            } : p
+          );
+          updateBookImages(bookId, newStorybook);
+        }
+      }
+    }
   };
 
   // Bookshelf click handler
@@ -276,6 +373,14 @@ const App = () => {
     <div className="relative bg-gray-900/40 backdrop-blur-sm rounded-xl p-6 shadow-2xl overflow-hidden h-full flex flex-col justify-center">
       <div className="absolute inset-0 z-0">
         <div className="h-full w-full bg-gradient-to-t from-gray-900/60 to-transparent"></div>
+      </div>
+      <div className="relative z-10 mb-4">
+        <h3 className="text-xl font-bold text-white text-center">
+          Your Digital Bookshelf 
+          {bookshelf.length > 0 && (
+            <span className="text-blue-300"> ({bookshelf.length} {bookshelf.length === 1 ? 'story' : 'stories'})</span>
+          )}
+        </h3>
       </div>
       <div className="relative w-full h-64 flex-1 flex flex-col justify-center">
         {bookshelf.length > 0 ? (
@@ -437,7 +542,16 @@ const App = () => {
               ))}
             </div>
             <div className="flex flex-row justify-center gap-4 mt-8">
-              <button onClick={() => { setStep(1); setTopic(''); setProficiency('Beginner'); setSource('Academic Papers'); setTextLength('Short (5 Pages with Quick Sentences)'); setScrollDirection('sidescroll'); setStorybook([]); }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+              <button onClick={() => { 
+                clearSession();
+                setStep(1); 
+                setTopic(''); 
+                setProficiency('Beginner'); 
+                setSource('Academic Papers'); 
+                setTextLength('Short (5 Pages with Quick Sentences)'); 
+                setScrollDirection('sidescroll'); 
+                setSummary('');
+              }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
                 Start Over
               </button>
               <button onClick={saveStory} className="bg-green-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-green-700 transition-colors">
@@ -448,7 +562,7 @@ const App = () => {
         );
       case 6:
         // Viewing a saved book
-        const book = bookshelf.find(b => b.id === viewingBookId);
+        const book = getBook(viewingBookId!);
         if (!book) return null;
         return (
           <div className="w-full">
@@ -461,7 +575,16 @@ const App = () => {
                   className={`bg-white rounded-lg shadow-2xl overflow-hidden transform transition-all hover:scale-105 hover:shadow-blue-300 ${scrollDirection === 'sidescroll' ? 'flex-shrink-0 w-80 md:w-96' : 'w-full'}`}
                 >
                     <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
-                        {page.imageLoading ? <Spinner /> : <img src={page.imageUrl || ''} alt={page.title} className="w-full h-full object-cover" />}
+                        {page.imageLoading ? (
+                          <Spinner />
+                        ) : page.imageUrl ? (
+                          <img src={page.imageUrl} alt={page.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-gray-500">
+                            <div className="text-4xl mb-2">📖</div>
+                            <div className="text-sm">Saved Story</div>
+                          </div>
+                        )}
                     </div>
                     <div className="p-4">
                         <h3 className="text-lg font-bold text-gray-800">{index + 1}. {page.title}</h3>
@@ -470,9 +593,29 @@ const App = () => {
                 </div>
               ))}
             </div>
-            <button onClick={() => { setStep(1); setViewingBookId(null); }} className="block mx-auto mt-8 bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
-              Back to Home
-            </button>
+            <div className="flex justify-center gap-4 mt-8">
+              <button onClick={() => { setStep(1); setViewingBookId(null); }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+                Back to Home
+              </button>
+              <button 
+                onClick={() => viewingBookId && regenerateBookImages(viewingBookId)} 
+                className="bg-blue-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              >
+                Regenerate Images
+              </button>
+              <button 
+                onClick={() => { 
+                  if (viewingBookId) {
+                    removeBook(viewingBookId);
+                    setStep(1); 
+                    setViewingBookId(null);
+                  }
+                }} 
+                className="bg-red-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+              >
+                Delete Story
+              </button>
+            </div>
           </div>
         );
       default:
