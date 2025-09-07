@@ -112,8 +112,8 @@ export async function POST(request: NextRequest) {
 
     // Initialize Google Generative AI
     const genAI = new GoogleGenerativeAI(apiKey);
-    // const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
- const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image-preview" });
+ //const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
     // Enhanced prompt for better storybook-style images
     const enhancedPrompt = `Create a high-quality, vibrant, storybook-style illustration for adults or researchers. ${prompt}. The image should be colorful, engaging, and suitable for educational content. Style: digital art, clean lines, bright colors, child-friendly.`;

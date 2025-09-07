@@ -378,7 +378,38 @@ const App = () => {
 
       let memeText = '';
       if (data.success && data.content) {
-        memeText = data.content.trim();
+        try {
+          // Parse the JSON response with multiple options
+          let cleanedContent = data.content;
+          
+          // If the content is wrapped in markdown code blocks, extract the JSON
+          const jsonMatch = cleanedContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+          if (jsonMatch) {
+            cleanedContent = jsonMatch[1];
+          }
+          
+          const memeOptions = JSON.parse(cleanedContent);
+          
+          // Handle both direct options array format and object with options property
+          const optionsArray = Array.isArray(memeOptions) ? memeOptions : memeOptions.options;
+          
+          if (optionsArray && Array.isArray(optionsArray) && optionsArray.length > 0) {
+            // Find the most sarcastic option (highest sarcasm level)
+            const mostSarcastic = optionsArray.find(option => option.sarcasm_level === 'high') ||
+                                 optionsArray.find(option => option.sarcasm_level === 'medium') ||
+                                 optionsArray[0]; // fallback to first option
+            
+            memeText = mostSarcastic.text;
+            console.log('Generated meme options:', optionsArray);
+            console.log('Selected most sarcastic:', mostSarcastic);
+          } else {
+            // Fallback to treating content as plain text
+            memeText = data.content.trim();
+          }
+        } catch (parseError) {
+          console.error('Failed to parse meme options, using content as plain text:', parseError);
+          memeText = data.content.trim();
+        }
       }
 
       // Generate meme image
@@ -522,6 +553,83 @@ const App = () => {
           updateBookImages(bookId, newStorybook);
         }
       }
+    }
+  };
+
+  // Regenerate text for a saved meme
+  const regenerateMemeText = async (bookId: number) => {
+    const book = getBook(bookId);
+    if (!book || book.storybook.length !== 1) return;
+
+    const meme = book.storybook[0];
+
+    try {
+      // Generate new meme text with multiple options
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic: book.topic,
+          proficiency: 'Beginner', // Default for saved memes
+          source: 'Academic Papers', // Default for saved memes
+          type: 'meme-text'
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate meme text');
+      }
+
+      let memeText = '';
+      if (data.success && data.content) {
+        try {
+          // Parse the JSON response with multiple options
+          let cleanedContent = data.content;
+          
+          // If the content is wrapped in markdown code blocks, extract the JSON
+          const jsonMatch = cleanedContent.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+          if (jsonMatch) {
+            cleanedContent = jsonMatch[1];
+          }
+          
+          const memeOptions = JSON.parse(cleanedContent);
+          
+          // Handle both direct options array format and object with options property
+          const optionsArray = Array.isArray(memeOptions) ? memeOptions : memeOptions.options;
+          
+          if (optionsArray && Array.isArray(optionsArray) && optionsArray.length > 0) {
+            // Find the most sarcastic option (highest sarcasm level)
+            const mostSarcastic = optionsArray.find(option => option.sarcasm_level === 'high') ||
+                                 optionsArray.find(option => option.sarcasm_level === 'medium') ||
+                                 optionsArray[0]; // fallback to first option
+            
+            memeText = mostSarcastic.text;
+            console.log('Generated meme options for regeneration:', optionsArray);
+            console.log('Selected most sarcastic for regeneration:', mostSarcastic);
+          } else {
+            // Fallback to treating content as plain text
+            memeText = data.content.trim();
+          }
+        } catch (parseError) {
+          console.error('Failed to parse meme options, using content as plain text:', parseError);
+          memeText = data.content.trim();
+        }
+      }
+
+      // Update the meme with new text
+      const newStorybook = [{
+        ...meme,
+        content: memeText || "Couldn't generate a witty caption!",
+        title: `${book.topic} Meme` // Keep the same title
+      }];
+      updateBookImages(bookId, newStorybook);
+
+    } catch (error) {
+      console.error('Failed to regenerate meme text:', error);
     }
   };
 
@@ -931,6 +1039,12 @@ const App = () => {
                   className="bg-blue-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
                 >
                   Regenerate Image
+                </button>
+                <button 
+                  onClick={() => viewingBookId && regenerateMemeText(viewingBookId)} 
+                  className="bg-purple-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+                >
+                  Regenerate Text
                 </button>
                 <button onClick={() => {
                   removeBook(book.id);
