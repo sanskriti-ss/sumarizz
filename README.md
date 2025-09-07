@@ -258,7 +258,16 @@ npm start
 - **Type Coverage**: 100% TypeScript
 - **Performance**: <2s initial load
 
-## Acknowledgments
+## 👥 Contributors
+
+This project was built by an amazing team during the Man vs AI Hackathon:
+
+- **Clyde Villacrusis** - State Management & AI Integration
+- **Simon Zhang** - Frontend Architecture & UI/UX Design  
+- **Sanskriti Shindadkar** - Core Development & API Development
+- **Rana** - Testing & Performance Optimization
+
+## 🙏 Acknowledgments
 
 - **Google AI** for Gemini and Imagen APIs
 - **Vercel** for Next.js framework and hosting
