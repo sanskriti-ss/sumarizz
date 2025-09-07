@@ -270,7 +270,6 @@ This project was built by an amazing team during the Man vs AI Hackathon:
 ## 🙏 Acknowledgments
 
 - **Google AI** for Gemini and Imagen APIs
-- **Vercel** for Next.js framework and hosting
 - **Tailwind Labs** for beautiful utility CSS
 - **Poimandres** for Zustand state management
 
