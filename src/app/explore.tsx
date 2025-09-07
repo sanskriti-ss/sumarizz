@@ -737,12 +737,12 @@ const App = () => {
         );
       case 2:
         return (
-          <div className="w-full max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg">
-            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Scope of your Topic</h2>
+          <div className="w-full max-w-lg mx-auto bg-black/60 p-8 rounded-xl shadow-lg">
+            <h2 className="text-2xl font-bold mb-6 text-center text-white">Scope of your Topic</h2>
             <div className="space-y-6">
                 <div>
-                    <label className="block text-gray-700 font-semibold mb-2">Proficiency Level</label>
-                    <select value={proficiency} onChange={(e) => setProficiency(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                    <label className="block text-white font-semibold mb-2">Proficiency Level</label>
+                    <select value={proficiency} onChange={(e) => setProficiency(e.target.value)} className="w-full px-4 py-3 border border-gray-700 bg-black/40 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400">
                       <option value="">Select a level...</option>
                       <option value="Beginner">Beginner (New to the topic)</option>
                       <option value="Intermediate">Intermediate (Somewhat proficient)</option>
@@ -750,16 +750,16 @@ const App = () => {
                     </select>
                 </div>
                 <div>
-                    <label className="block text-gray-700 font-semibold mb-2">Preferred Source</label>
-                    <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                    <label className="block text-white font-semibold mb-2">Preferred Source</label>
+                    <select value={source} onChange={(e) => setSource(e.target.value)} className="w-full px-4 py-3 border border-gray-700 bg-black/40 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400">
                       <option value="">Select a source type...</option>
                       <option value="Academic Papers">Academic Papers (e.g., Nature)</option>
                       <option value="Existing Newsletters">Existing Newsletters (e.g., Lenny's Newsletter)</option>
                     </select>
                 </div>
                 <div>
-                    <label className="block text-gray-700 font-semibold mb-2">Text Output Length</label>
-                    <select value={textLength} onChange={(e) => setTextLength(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                    <label className="block text-white font-semibold mb-2">Text Output Length</label>
+                    <select value={textLength} onChange={(e) => setTextLength(e.target.value)} className="w-full px-4 py-3 border border-gray-700 bg-black/40 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400">
                       <option value="">Select length...</option>
                       <option value="Short (5 pages with Detailed Paragraphs)">Short (5 pages with Detailed Paragraphs)</option>
                       <option value="Short (5 Pages with Quick Sentences)">Short (5 Pages with Quick Sentences)</option>
@@ -769,8 +769,8 @@ const App = () => {
                     </select>
                 </div>
                 <div>
-                    <label className="block text-gray-700 font-semibold mb-2">Scroll Direction</label>
-                    <select value={scrollDirection} onChange={(e) => setScrollDirection(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900">
+                    <label className="block text-white font-semibold mb-2">Scroll Direction</label>
+                    <select value={scrollDirection} onChange={(e) => setScrollDirection(e.target.value)} className="w-full px-4 py-3 border border-gray-700 bg-black/40 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400">
                       <option value="">Select a direction...</option>
                       <option value="sidescroll">Side Scroll</option>
                       <option value="downscroll">Down Scroll</option>
@@ -778,7 +778,7 @@ const App = () => {
                 </div>
             </div>
             {errorMessage && <p className="text-red-500 text-center mt-4">{errorMessage}</p>}
-            <button onClick={generateSummary} className="w-full mt-8 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all transform hover:scale-105">
+            <button onClick={generateSummary} className="w-full mt-8 bg-blue-900 text-white py-3 rounded-lg font-semibold hover:bg-blue-800 transition-all transform hover:scale-105">
                 Generate Summary
             </button>
           </div>
