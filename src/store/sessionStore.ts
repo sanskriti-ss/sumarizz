@@ -15,10 +15,14 @@ interface SessionState {
   currentTopic: string;
   currentSummary: string;
   currentStep: number;
+  currentTextLength: string;
+  currentMemeData: { text: string; imageUrl: string | null; imageLoading: boolean };
   setCurrentStorybook: (storybook: StoryPage[]) => void;
   setCurrentTopic: (topic: string) => void;
   setCurrentSummary: (summary: string) => void;
   setCurrentStep: (step: number) => void;
+  setCurrentTextLength: (textLength: string) => void;
+  setCurrentMemeData: (memeData: { text: string; imageUrl: string | null; imageLoading: boolean }) => void;
   updatePageImage: (pageId: number, imageUrl: string) => void;
   clearSession: () => void;
 }
@@ -68,6 +72,8 @@ export const useSessionStore = create<SessionState>()(
       currentTopic: '',
       currentSummary: '',
       currentStep: 1,
+      currentTextLength: 'Short (5 Pages with Quick Sentences)',
+      currentMemeData: { text: '', imageUrl: null, imageLoading: false },
       
       setCurrentStorybook: (storybook) => {
         set({ currentStorybook: storybook });
@@ -83,6 +89,14 @@ export const useSessionStore = create<SessionState>()(
       
       setCurrentStep: (step) => {
         set({ currentStep: step });
+      },
+      
+      setCurrentTextLength: (textLength) => {
+        set({ currentTextLength: textLength });
+      },
+      
+      setCurrentMemeData: (memeData) => {
+        set({ currentMemeData: memeData });
       },
       
       updatePageImage: (pageId, imageUrl) => {
@@ -101,6 +115,8 @@ export const useSessionStore = create<SessionState>()(
           currentTopic: '',
           currentSummary: '',
           currentStep: 1,
+          currentTextLength: 'Short (5 Pages with Quick Sentences)',
+          currentMemeData: { text: '', imageUrl: null, imageLoading: false },
         });
       },
     }),

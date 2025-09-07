@@ -21,10 +21,7 @@ const App = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [viewingBookId, setViewingBookId] = useState<number | null>(null);
   
-  // Add meme state
-  const [memeData, setMemeData] = useState<{ text: string; imageUrl: string | null; imageLoading: boolean }>({ text: '', imageUrl: null, imageLoading: false });
-  
-  // Ref to track if we've started auto-regenerating images for this storybook session
+  // Ref to track if we've already started auto-regenerating images for this storybook session
   const hasAutoRegeneratedImages = useRef(false);
 
   // Use Zustand stores
@@ -34,19 +31,28 @@ const App = () => {
     currentTopic: sessionTopic,
     currentSummary: sessionSummary,
     currentStep: step,
+    currentTextLength: sessionTextLength,
+    currentMemeData: sessionMemeData,
     setCurrentStorybook: setStorybook,
     setCurrentTopic: setSessionTopic,
     setCurrentSummary: setSessionSummary,
     setCurrentStep: setStep,
+    setCurrentTextLength: setSessionTextLength,
+    setCurrentMemeData: setSessionMemeData,
     updatePageImage,
     clearSession
   } = useSessionStore();
+  
+  // Use meme data from session store
+  const memeData = sessionMemeData;
+  const setMemeData = setSessionMemeData;
 
   // Sync local state with session store and update session store when local state changes
   useEffect(() => {
     if (sessionTopic) setTopic(sessionTopic);
     if (sessionSummary) setSummary(sessionSummary);
-  }, [sessionTopic, sessionSummary]);
+    if (sessionTextLength) setTextLength(sessionTextLength);
+  }, [sessionTopic, sessionSummary, sessionTextLength]);
 
   // Update session store when topic or summary changes
   useEffect(() => {
@@ -56,6 +62,10 @@ const App = () => {
   useEffect(() => {
     setSessionSummary(summary);
   }, [summary, setSessionSummary]);
+
+  useEffect(() => {
+    setSessionTextLength(textLength);
+  }, [textLength, setSessionTextLength]);
 
   useEffect(() => {
     setStep(step);
@@ -133,6 +143,15 @@ const App = () => {
       }
     }
   }, [storybookKey]); // Depend on the stable key
+
+  // Auto-regenerate meme if it's missing after page reload
+  useEffect(() => {
+    // Check if we're on step 5 (display step), textLength is Meme, but meme is missing
+    if (step === 5 && textLength === 'Meme' && !memeData.imageLoading && !memeData.imageUrl && topic) {
+      console.log('Auto-regenerating missing meme for topic:', topic);
+      generateMeme();
+    }
+  }, [step, textLength, memeData.imageUrl, memeData.imageLoading, topic]);
 
   const generateSummary = async () => {
     if (!proficiency || !source || !textLength || !scrollDirection) {
@@ -506,6 +525,59 @@ const App = () => {
     }
   };
 
+  // Regenerate image for a saved meme
+  const regenerateMemeImage = async (bookId: number) => {
+    const book = getBook(bookId);
+    if (!book || book.storybook.length !== 1) return;
+
+    const meme = book.storybook[0];
+    
+    // Mark meme as loading
+    const updatedStorybook = [{
+      ...meme,
+      imageLoading: true,
+      imageUrl: null
+    }];
+    updateBookImages(bookId, updatedStorybook);
+
+    try {
+      // Generate new meme image
+      const imageResponse = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: `A high-quality, funny, and visually appealing meme image representing the concept of "${book.topic}". Style: modern, shareable, clear, and impactful. IMPORTANT: Do not include any text, words, or letters in the image itself.`,
+          pageId: 'meme'
+        }),
+      });
+
+      const imageData = await imageResponse.json();
+
+      if (imageResponse.ok && imageData.success && imageData.imageUrl) {
+        // Update the meme with new image
+        const newStorybook = [{
+          ...meme,
+          imageUrl: imageData.imageUrl,
+          imageLoading: false
+        }];
+        updateBookImages(bookId, newStorybook);
+      } else {
+        throw new Error('Failed to generate meme image');
+      }
+    } catch (error) {
+      console.error('Failed to regenerate meme image:', error);
+      // Set error placeholder
+      const newStorybook = [{
+        ...meme,
+        imageUrl: 'https://placehold.co/600x400/FF0000/FFFFFF?text=Image+Failed',
+        imageLoading: false
+      }];
+      updateBookImages(bookId, newStorybook);
+    }
+  };
+
   // Bookshelf click handler
   const openBook = (id: number) => {
     setViewingBookId(id);
@@ -833,7 +905,11 @@ const App = () => {
               <h2 className="text-3xl font-bold mb-6 text-center text-white">Saved Meme: {book.topic}</h2>
               <div className="max-w-md mx-auto bg-black text-white rounded-lg shadow-2xl overflow-hidden">
                 <div className="w-full bg-gray-800 flex items-center justify-center">
-                  {meme.imageUrl ? (
+                  {meme.imageLoading ? (
+                    <div className="p-8">
+                      <Spinner />
+                    </div>
+                  ) : meme.imageUrl ? (
                     <img src={meme.imageUrl} alt={`Meme for ${book.topic}`} className="w-full h-auto object-contain" />
                   ) : (
                     <div className="p-8 text-center">
@@ -844,10 +920,23 @@ const App = () => {
                 <p className="p-4 text-center font-bold text-xl">{meme.content}</p>
               </div>
               <div className="flex flex-row justify-center gap-4 mt-8">
-                <button onClick={() => setViewingBookId(null)} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+                <button onClick={() => {
+                  setViewingBookId(null);
+                  setStep(1);
+                }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
                   Back to Bookshelf
                 </button>
-                <button onClick={() => removeBook(book.id)} className="bg-red-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                <button 
+                  onClick={() => viewingBookId && regenerateMemeImage(viewingBookId)} 
+                  className="bg-blue-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  Regenerate Image
+                </button>
+                <button onClick={() => {
+                  removeBook(book.id);
+                  setViewingBookId(null);
+                  setStep(1);
+                }} className="bg-red-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-red-700 transition-colors">
                   Delete Meme
                 </button>
               </div>
