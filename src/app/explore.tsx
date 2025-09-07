@@ -706,7 +706,7 @@ const App = () => {
                 </div>
             </div>
             {errorMessage && <p className="text-red-500 text-center mt-4">{errorMessage}</p>}
-            <button onClick={generateSummary} className="w-full mt-8 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all transform hover:scale-105">
+            <button onClick={generateSummary} className="w-full mt-8 bg-blue-900 text-white py-3 rounded-lg font-semibold hover:bg-blue-800 transition-all transform hover:scale-105">
                 Generate Summary
             </button>
           </div>
