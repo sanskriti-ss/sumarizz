@@ -101,9 +101,12 @@ export async function POST(request: NextRequest) {
     } else if (type === 'storybook') {
       systemPrompt = `You are a creative educational content creator. Create engaging, age-appropriate storybook pages that explain concepts in a narrative format. IMPORTANT: Respond with ONLY valid JSON, no additional text or formatting.`;
       userQuery = `Create a storybook about "${topic}" for a ${proficiency} level audience. Generate exactly ${pageCount} pages, each with a title, content (2-3 sentences), and a brief image description. Return ONLY this JSON structure with no additional text: {"pages": [{"id": 1, "title": "Page Title", "content": "Page content", "imageDescription": "Description for image generation"}]}`;
+    } else if (type === 'meme-text') {
+      systemPrompt = `You are a witty meme creator. Generate funny, clever, and easy-to-understand meme captions.`;
+      userQuery = `Based on the topic "${topic}", generate a very brief (one or two short sentences max), funny, and clever meme caption suitable for a ${proficiency} level audience. The caption should be a short narrative or a punchline that would work well on a meme about the topic. Make it easy to understand and shareable.`;
     } else {
       return NextResponse.json(
-        { error: 'Invalid content type. Must be "summary" or "storybook"' },
+        { error: 'Invalid content type. Must be "summary", "storybook", or "meme-text"' },
         { status: 400 }
       );
     }

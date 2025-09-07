@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useBookshelfStore, type StoryPage, type BookshelfItem, clearCorruptedStorage } from '../store/bookshelfStore';
 import { useSessionStore } from '../store/sessionStore';
 
@@ -20,6 +20,12 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [viewingBookId, setViewingBookId] = useState<number | null>(null);
+  
+  // Add meme state
+  const [memeData, setMemeData] = useState<{ text: string; imageUrl: string | null; imageLoading: boolean }>({ text: '', imageUrl: null, imageLoading: false });
+  
+  // Ref to track if we've started auto-regenerating images for this storybook session
+  const hasAutoRegeneratedImages = useRef(false);
 
   // Use Zustand stores
   const { bookshelf, addBook, removeBook, getBook, updateBookImages } = useBookshelfStore();
@@ -84,6 +90,49 @@ const App = () => {
       clearCorruptedStorage();
     }
   }, []);
+
+  // Reset auto-regeneration flag when viewing different books
+  useEffect(() => {
+    hasAutoRegeneratedImages.current = false;
+    setMemeData({ text: '', imageUrl: null, imageLoading: false });
+  }, [viewingBookId]);
+
+  // Create a stable identifier for when we need to check for missing images
+  const storybookKey = useMemo(() => {
+    if (!storybook || storybook.length === 0) return null;
+    return `${storybook.length}-${viewingBookId}`;
+  }, [storybook.length, viewingBookId]);
+
+  // Auto-regenerate missing images when component loads or storybook changes
+  useEffect(() => {
+    if (storybookKey && !hasAutoRegeneratedImages.current) {
+      // Check if any pages are missing images (not loading and no imageUrl)
+      const pagesNeedingImages = storybook.filter(page => 
+        !page.imageLoading && 
+        (!page.imageUrl || page.imageUrl.includes('placehold.co'))
+      );
+      
+      if (pagesNeedingImages.length > 0) {
+        console.log('Auto-regenerating images for', pagesNeedingImages.length, 'pages');
+        hasAutoRegeneratedImages.current = true;
+        
+        // Set loading state for pages that need images
+        const updatedStorybook = storybook.map(page => 
+          pagesNeedingImages.find(p => p.id === page.id) 
+            ? { ...page, imageLoading: true, imageUrl: null }
+            : page
+        );
+        setStorybook(updatedStorybook);
+
+        // Generate images for pages that need them (use setTimeout to avoid blocking)
+        setTimeout(() => {
+          pagesNeedingImages.forEach(page => {
+            generateImageForPage(page.id, page.content);
+          });
+        }, 100);
+      }
+    }
+  }, [storybookKey]); // Depend on the stable key
 
   const generateSummary = async () => {
     if (!proficiency || !source || !textLength || !scrollDirection) {
@@ -157,6 +206,12 @@ const App = () => {
     setErrorMessage('');
     setStep(5); // Go directly to the storybook view
 
+    // Check if user selected meme format
+    if (textLength === 'Meme') {
+      await generateMeme();
+      return;
+    }
+
     // Determine number of pages based on text length selection
     let pageCount;
     if (textLength === 'Full Chapter') {
@@ -222,6 +277,8 @@ const App = () => {
           }));
           
           setStorybook(initialStorybookState);
+          hasAutoRegeneratedImages.current = false; // Reset the ref for new storybook
+          setMemeData({ text: '', imageUrl: null, imageLoading: false }); // Reset meme data
           setLoading(false); // Main loading is done, now load images individually
 
           // Fetch images for each page
@@ -275,13 +332,97 @@ const App = () => {
     }
   };
 
+  // Generate Meme function
+  const generateMeme = async () => {
+    setMemeData({ text: '', imageUrl: null, imageLoading: true });
+
+    try {
+      // Generate meme text first
+      const response = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic,
+          proficiency,
+          source,
+          type: 'meme-text'
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate meme text');
+      }
+
+      let memeText = '';
+      if (data.success && data.content) {
+        memeText = data.content.trim();
+      }
+
+      // Generate meme image
+      const imageResponse = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: `A high-quality, funny, and visually appealing meme image representing the concept of "${topic}". Style: modern, shareable, clear, and impactful. IMPORTANT: Do not include any text, words, or letters in the image itself.`,
+          pageId: 'meme'
+        }),
+      });
+
+      const imageData = await imageResponse.json();
+
+      if (imageResponse.ok && imageData.success && imageData.imageUrl) {
+        setMemeData({
+          text: memeText || "Couldn't generate a witty caption!",
+          imageUrl: imageData.imageUrl,
+          imageLoading: false
+        });
+      } else {
+        throw new Error('Failed to generate meme image');
+      }
+
+    } catch (error) {
+      console.error('Meme generation failed:', error);
+      setErrorMessage('Failed to generate meme. Please try again.');
+      setMemeData({
+        text: 'An error occurred during generation.',
+        imageUrl: 'https://placehold.co/600x400/FF0000/FFFFFF?text=Error',
+        imageLoading: false
+      });
+      setStep(4);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Save Story handler
   const saveStory = () => {
-    addBook({
-      topic: topic,
-      summary: summary,
-      storybook: storybook
-    });
+    if (textLength === 'Meme') {
+      // Save meme as a single-page storybook entry
+      addBook({
+        topic: topic,
+        summary: `Meme: ${memeData.text}`,
+        storybook: [{
+          id: 1,
+          title: `${topic} Meme`,
+          content: memeData.text,
+          imageUrl: memeData.imageUrl,
+          imageLoading: false
+        }]
+      });
+    } else {
+      // Save regular storybook
+      addBook({
+        topic: topic,
+        summary: summary,
+        storybook: storybook
+      });
+    }
     
     // Clear session and reset to initial state
     clearSession();
@@ -292,6 +433,7 @@ const App = () => {
     setTextLength('Short (5 Pages with Quick Sentences)');
     setScrollDirection('sidescroll');
     setSummary('');
+    setMemeData({ text: '', imageUrl: null, imageLoading: false });
   };
 
   // Regenerate images for a saved book
@@ -402,47 +544,64 @@ const App = () => {
       <div className="relative w-full h-64 flex-1 flex flex-col justify-center">
         {bookshelf.length > 0 ? (
           <div className="flex flex-wrap justify-center gap-4 relative z-10 items-center h-full">
-            {bookshelf.map((book, idx) => (
-              <div
-                key={book.id}
-                className="w-6 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer overflow-hidden group flex items-center justify-center"
-                onClick={() => openBook(book.id)}
-                title={book.topic}
-                style={{ backgroundColor: bookshelfColors[idx % bookshelfColors.length] }}
-              >
-                {/* Top black band */}
+            {bookshelf.map((book, idx) => {
+              const isMeme = book.storybook.length === 1 && book.summary.startsWith('Meme:');
+              return (
                 <div
-                  style={{
-                    position: 'absolute',
-                    top: 10,
-                    left: 0,
-                    right: 0,
-                    height: 8,
-                    background: 'rgba(0,0,0,0.5)',
-                    borderRadius: '4px',
-                    zIndex: 2,
-                  }}
-                />
-                {/* Bottom black band */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 10,
-                    left: 0,
-                    right: 0,
-                    height: 8,
-                    background: 'rgba(0,0,0,0.5)',
-                    borderRadius: '4px',
-                    zIndex: 2,
-                  }}
-                />
-                <div className="flex items-center justify-center h-full w-full">
-                  <span className="text-white text-xs font-semibold" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.05em' }}>
-                    {book.topic.slice(0, 15)}
-                  </span>
+                  key={book.id}
+                  className="w-6 h-40 rounded-lg shadow-xl relative transform transition-transform hover:scale-105 cursor-pointer overflow-hidden group flex items-center justify-center"
+                  onClick={() => openBook(book.id)}
+                  title={`${isMeme ? '😂 ' : '📖 '}${book.topic}`}
+                  style={{ backgroundColor: bookshelfColors[idx % bookshelfColors.length] }}
+                >
+                  {/* Top black band */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      left: 0,
+                      right: 0,
+                      height: 8,
+                      background: 'rgba(0,0,0,0.5)',
+                      borderRadius: '4px',
+                      zIndex: 2,
+                    }}
+                  />
+                  {/* Bottom black band */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 10,
+                      left: 0,
+                      right: 0,
+                      height: 8,
+                      background: 'rgba(0,0,0,0.5)',
+                      borderRadius: '4px',
+                      zIndex: 2,
+                    }}
+                  />
+                  {/* Meme indicator */}
+                  {isMeme && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        fontSize: '10px',
+                        zIndex: 3,
+                      }}
+                    >
+                      😂
+                    </div>
+                  )}
+                  <div className="flex items-center justify-center h-full w-full">
+                    <span className="text-white text-xs font-semibold" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.05em' }}>
+                      {book.topic.slice(0, 15)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -456,11 +615,16 @@ const App = () => {
   );
 
   const renderStep = () => {
-    if (loading && (step === 3 || (step === 5 && storybook.length === 0))) {
+    if (loading && (step === 3 || (step === 5 && storybook.length === 0 && !memeData.imageUrl))) {
         return (
           <div className="text-center flex flex-col items-center justify-center text-white">
             <h2 className="text-2xl font-bold mb-4">
-                {step === 3 ? "Generating Text Summary..." : "Crafting your story..."}
+                {step === 3 
+                  ? "Generating Text Summary..." 
+                  : textLength === 'Meme' 
+                    ? "Creating your meme..." 
+                    : "Crafting your story..."
+                }
             </h2>
             <Spinner />
           </div>
@@ -529,6 +693,7 @@ const App = () => {
                       <option value="Short (5 Pages with Quick Sentences)">Short (5 Pages with Quick Sentences)</option>
                       <option value="Medium (11 pages)">Medium (11 pages)</option>
                       <option value="Full Chapter">Full Chapter (30 pages)</option>
+                      <option value="Meme">Meme (Single Funny Image with Caption)</option>
                     </select>
                 </div>
                 <div>
@@ -553,11 +718,59 @@ const App = () => {
             <p className="bg-gray-900 text-gray-200 p-6 rounded-lg mb-6 text-left">{summary}</p>
             {errorMessage && <p className="text-red-500 text-center mb-4">{errorMessage}</p>}
             <button onClick={generateStorybook} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-all transform hover:scale-105">
-              Generate {textLength === 'Full Chapter' ? '30-page' : textLength === 'Medium (11 pages)' ? '11-page' : '5-page'} Storybook
+              {textLength === 'Meme' 
+                ? 'Generate Meme' 
+                : `Generate ${textLength === 'Full Chapter' ? '30-page' : textLength === 'Medium (11 pages)' ? '11-page' : '5-page'} Storybook`
+              }
             </button>
           </div>
         );
       case 5:
+        // Check if this is a meme or storybook
+        if (textLength === 'Meme') {
+          return (
+            <div className="w-full">
+              <h2 className="text-3xl font-bold mb-6 text-center text-white">Your Meme: {topic}</h2>
+              <div className="max-w-md mx-auto bg-black text-white rounded-lg shadow-2xl overflow-hidden">
+                <div className="w-full bg-gray-800 flex items-center justify-center">
+                  {memeData.imageLoading ? (
+                    <div className="p-8">
+                      <Spinner />
+                    </div>
+                  ) : memeData.imageUrl ? (
+                    <img src={memeData.imageUrl} alt={`Meme for ${topic}`} className="w-full h-auto object-contain" />
+                  ) : (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-400">No image available</p>
+                    </div>
+                  )}
+                </div>
+                <p className="p-4 text-center font-bold text-xl">{memeData.text}</p>
+              </div>
+              <div className="flex flex-row justify-center gap-4 mt-8">
+                <button onClick={() => { 
+                  clearSession();
+                  setStep(1); 
+                  setTopic(''); 
+                  setProficiency('Beginner'); 
+                  setSource('Academic Papers'); 
+                  setTextLength('Short (5 Pages with Quick Sentences)'); 
+                  setScrollDirection('sidescroll'); 
+                  setSummary('');
+                  setMemeData({ text: '', imageUrl: null, imageLoading: false });
+                  setErrorMessage('');
+                }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+                  Start Over
+                </button>
+                <button onClick={saveStory} className="bg-green-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+                  Save Meme
+                </button>
+              </div>
+            </div>
+          );
+        }
+        
+        // Regular storybook rendering
         const scrollClasses = scrollDirection === 'sidescroll' 
           ? 'flex overflow-x-auto space-x-6 p-4 rounded-xl' 
           : 'flex flex-col space-y-6 p-4 rounded-xl';
@@ -594,6 +807,8 @@ const App = () => {
                 setTextLength('Short (5 Pages with Quick Sentences)'); 
                 setScrollDirection('sidescroll'); 
                 setSummary('');
+                setMemeData({ text: '', imageUrl: null, imageLoading: false });
+                setErrorMessage('');
               }} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
                 Start Over
               </button>
@@ -607,6 +822,40 @@ const App = () => {
         // Viewing a saved book
         const book = getBook(viewingBookId!);
         if (!book) return null;
+        
+        // Check if this is a saved meme (single page with meme characteristics)
+        const isMeme = book.storybook.length === 1 && book.summary.startsWith('Meme:');
+        
+        if (isMeme) {
+          const meme = book.storybook[0];
+          return (
+            <div className="w-full">
+              <h2 className="text-3xl font-bold mb-6 text-center text-white">Saved Meme: {book.topic}</h2>
+              <div className="max-w-md mx-auto bg-black text-white rounded-lg shadow-2xl overflow-hidden">
+                <div className="w-full bg-gray-800 flex items-center justify-center">
+                  {meme.imageUrl ? (
+                    <img src={meme.imageUrl} alt={`Meme for ${book.topic}`} className="w-full h-auto object-contain" />
+                  ) : (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-400">No image available</p>
+                    </div>
+                  )}
+                </div>
+                <p className="p-4 text-center font-bold text-xl">{meme.content}</p>
+              </div>
+              <div className="flex flex-row justify-center gap-4 mt-8">
+                <button onClick={() => setViewingBookId(null)} className="bg-gray-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-gray-700 transition-colors">
+                  Back to Bookshelf
+                </button>
+                <button onClick={() => removeBook(book.id)} className="bg-red-600 text-white py-3 px-8 rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                  Delete Meme
+                </button>
+              </div>
+            </div>
+          );
+        }
+        
+        // Regular saved storybook rendering
         return (
           <div className="w-full">
             <h2 className="text-3xl font-bold mb-2 text-center text-white">Your Story: {book.topic}</h2>
