@@ -263,7 +263,7 @@ npm start
 This project was built by an amazing team during the Man vs AI Hackathon:
 
 - **Clyde Villacrusis** - State Management & AI Integration
-- **Simon Zhang** - Frontend Architecture & UI/UX Design  
+- **Simon Zhang** - Solution Architecture & UI/UX Design & "Meme" Feature Full-stack  
 - **Sanskriti Shindadkar** - Core Development & API Development
 - **Rana** - Testing & Performance Optimization
 
